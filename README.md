@@ -1,9 +1,9 @@
-Fitness Data Analyzer — DSCI 551 Final Project
+DSCI 551 Final Project: Fitness Data Analyzer
 Name: Savannah Yang
 Database System: DuckDB
 
-Project Overview
 This project simulates DuckDB's internal query execution mechanisms using plain Python. The goal is to demonstrate how DuckDB's two core design choices,columnar storage and vectorized batch execution, improve performance on analytical queries compared to row-oriented databases like MySQL.
+
 The application analyzes a synthetic fitness dataset and runs two features:
 
 Feature 1: Weekly calorie summary per user
