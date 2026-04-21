@@ -246,7 +246,7 @@ def feature1_weekly_calorie_summary(store):
     print("=" * 60)
     print("FEATURE 1: Weekly Calorie Summary (per user)")
     print("=" * 60)
-    print(f"  Columns read: user, date, calories  (workout_type & duration skipped)")
+    print(f"  Columns read: user, date, calories")
     print(f"  Batch size  : {BATCH_SIZE}  (DataChunk equivalent)")
     print()
     print(f"  {'User':<12} {'Week':<12} {'Calories':>10}")
@@ -300,7 +300,7 @@ def feature2_workout_type_breakdown(store):
     print("=" * 60)
     print("FEATURE 2: Workout Type Breakdown")
     print("=" * 60)
-    print(f"  Columns read: workout_type, calories  (user, date & duration skipped)")
+    print(f"  Columns read: workout_type, calories")
     print(f"  Batch size  : {BATCH_SIZE}  (DataChunk equivalent)")
     print()
     print(f"  {'Workout Type':<20} {'Sessions':>10} {'Avg Calories':>14}")
@@ -329,7 +329,6 @@ def simulation_demo(store):
     print(f"  Total rows loaded into column lists : {total_rows}")
     print(f"  Batch size (DataChunk equivalent)   : {BATCH_SIZE}")
     print()
-    print("  Stepping through batches:")
 
     running_sum   = 0
     running_count = 0
@@ -345,7 +344,7 @@ def simulation_demo(store):
         running_count += len(batch)
         batch_number  += 1
 
-        print(f"    Batch {batch_number}: rows {start+1}-{end}  |  "
+        print(f"Batch {batch_number}: rows {start+1}-{end}  |  "
               f"batch_sum = {batch_sum_val}  |  "
               f"running_total = {running_sum}")
 
@@ -354,7 +353,7 @@ def simulation_demo(store):
     overall_avg = round(running_sum / running_count, 1)
 
     print()
-    print(f"  Simulation result  → total calories: {running_sum}, "
+    print(f"total calories: {running_sum}, "
           f"overall average: {overall_avg}")
 
 
@@ -403,7 +402,7 @@ def main():
 
     print(f"  Loaded {store.total_rows()} workout records.")
     print(f"  Columns stored: user, workout_type, date, calories, duration")
-    print(f"  Each column is a separate Python list — NOT row-by-row storage.")
+    print(f"  Each column is a separate Python list, NOT row-by-row storage.")
 
     print()
     print("=" * 60)
