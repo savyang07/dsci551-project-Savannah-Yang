@@ -264,101 +264,54 @@ def feature1_weekly_calorie_summary(store):
 
 def feature2_workout_type_breakdown(store):
     """
-    FEATURE 2 — Workout Type Breakdown
-
-    As described in the Proposal: "workout type breakdown — group workouts by workout_type and
-    compute count of workouts per type and average calories per type"
-    As described in the Midterm Report: "Feature 2 runs SELECT workout_type, AVG(calories) on a 5-column
-    table. The optimizer sees only two columns referenced and pushes
-    column selection down to the scan."
-    Mapping: "Only the region and sales columns are scanned"
-
-
+    FEATURE 2 — Workout Type Breakdown (Vectorized Batch Execution)
+ 
     Groups workouts by type, returns session count and average calories per type.
-
+    This feature makes DuckDB's vectorized batch execution visible: with 2000+
+    rows, the data is split across multiple DataChunks and processed batch by batch.
+ 
     DuckDB internal operation:
-        1. Column pruning: only 'workout_type' and 'calories' are scanned.
-           user, date, and duration storage blocks are skipped entirely.
-        2. Vectorized AVG: accumulates SUM and COUNT in DataChunk batches,
-           then divides at the end,no per-row function call overhead.
-        3. Sort operator: final result ordered by avg descending.
-
+        1. Column pruning (Stage 4, Optimizer): only 'workout_type' and 'calories'
+           are scanned. user, date, and duration storage blocks are skipped entirely.
+        2. Vectorized AVG (Stage 7, Execution Engine): accumulates SUM and COUNT
+           in DataChunk batches of BATCH_SIZE, then divides at the end.
+           No per-row function call overhead.
+        3. Hash-aggregate operator: each batch's results merge into a running
+           hash table keyed on workout_type.
+        4. Sort operator: final result ordered by avg descending.
+ 
     Advantage:
-        With 5 columns, MySQL reads 5 times as much data per row.
-        DuckDB (and this simulation) reads 2/5 of the data.
+        With 5 columns, MySQL reads 5x as much data per row.
+        DuckDB (and this simulation) reads 2/5 of the data — only the
+        two columns the query actually needs.
     """
-
+ 
     # Column pruning: pull only the 2 needed columns
-    workout_col  = store.get_column("workout_type") 
-    calories_col = store.get_column("calories")      
-
-    result = batch_group_by_avg(workout_col, calories_col)
-
-    sorted_result = sorted(result.items(), key=lambda x: x[1]["avg"], reverse=True)
-
+    workout_col  = store.get_column("workout_type")
+    calories_col = store.get_column("calories")
+ 
     print()
     print("=" * 60)
-    print("FEATURE 2: Workout Type Breakdown")
+    print("FEATURE 2: Workout Type Breakdown (Vectorized Batch Execution)")
     print("=" * 60)
-    print(f"  Columns read: workout_type, calories")
-    print(f"  Batch size  : {BATCH_SIZE}  (DataChunk equivalent)")
+    print(f"  Columns read    : workout_type, calories")
+    print(f"  Columns skipped : user, date, duration")
+    print()
+    print("  --- Batch Execution Log ---")
+ 
+    result = batch_group_by_avg(workout_col, calories_col)
+ 
+    sorted_result = sorted(result.items(), key=lambda x: x[1]["avg"], reverse=True)
+ 
     print()
     print(f"  {'Workout Type':<20} {'Sessions':>10} {'Avg Calories':>14}")
     print(f"  {'-'*20} {'-'*10} {'-'*14}")
     for workout, stats in sorted_result:
         print(f"  {workout:<20} {stats['count']:>10} {stats['avg']:>14.1f}")
-
-
-# SECTION 4 — SIMULATION DEMO  (overall avg to verify correctness)
-
-def simulation_demo(store):
-    """
-    PYTHON SIMULATION — Columnar Storage + Batch Aggregation
-
-    This section computes the overall average calories using only the simulation
-    (no DuckDB) to show the batch mechanism step by step, then prints the result.
-    """
-
-    calories_col = store.get_column("calories")   # column pruning: only 1 column
-    total_rows   = store.total_rows()
-
-    print()
-    print("=" * 60)
-    print("SIMULATION: Columnar Storage + Batch Aggregation")
-    print("=" * 60)
-    print(f"  Total rows loaded into column lists : {total_rows}")
-    print(f"  Batch size (DataChunk equivalent)   : {BATCH_SIZE}")
-    print()
-
-    running_sum   = 0
-    running_count = 0
-    batch_number  = 0
-    start = 0
-
-    while start < total_rows:
-        end   = min(start + BATCH_SIZE, total_rows)
-        batch = calories_col[start:end]     
-
-        batch_sum_val = sum(batch)
-        running_sum   += batch_sum_val
-        running_count += len(batch)
-        batch_number  += 1
-
-        print(f"Batch {batch_number}: rows {start+1}-{end}  |  "
-              f"batch_sum = {batch_sum_val}  |  "
-              f"running_total = {running_sum}")
-
-        start = end
-
-    overall_avg = round(running_sum / running_count, 1)
-
-    print()
-    print(f"total calories: {running_sum}, "
-          f"overall average: {overall_avg}")
-
-
-# SECTION 5 — QUERY PIPELINE TRACE  (7-stage DuckDB pipeline)
-
+ 
+ 
+# SECTION 4 — QUERY PIPELINE TRACE  (7-stage DuckDB pipeline)
+ 
 def print_pipeline_trace(query_label, sql, columns_pruned_away, columns_used):
     """
     Based on "every SQL query passes through seven distinct stages before
@@ -366,77 +319,76 @@ def print_pipeline_trace(query_label, sql, columns_pruned_away, columns_used):
     Column Binding Resolver, Physical Planner, Execution Engine."
     """
     print()
-    print(f"  DuckDB 7-Stage Pipeline Trace: {query_label} : ")
+    print(f"  DuckDB 7-Stage Pipeline Trace: {query_label}")
     print(f"  SQL (conceptual): {sql}")
     print()
     stages = [
         ("1. Parser",                 "Tokenizes SQL into an abstract syntax tree. No catalog lookups yet."),
         ("2. Binder",                 f"Resolves column names → confirms {columns_used} exist in 'workouts'."),
-        ("3. Logical Planner",        f"Builds logical plan: Scan → Filter → Aggregate → Sort."),
+        ("3. Logical Planner",        "Builds logical plan: Scan → Filter → Aggregate → Sort."),
         ("4. Optimizer",              f"Column pruning: removes {columns_pruned_away} from the scan. "
                                        "Only loads columns actually referenced."),
-        ("5. Column Binding Resolver","Replaces column names with integer indices for the execution engine."),
-        ("6. Physical Planner",       f"Chooses physical operators: ColumnScan → HashAggregate → Sort."),
-        ("7. Execution Engine",       f"Pushes DataChunks of {BATCH_SIZE} values through the operator tree."),
+        ("5. Column Binding Resolver", "Replaces column names with integer indices for the execution engine."),
+        ("6. Physical Planner",        "Chooses physical operators: ColumnScan → HashAggregate → Sort."),
+        ("7. Execution Engine",        f"Pushes DataChunks of {BATCH_SIZE} values through the operator tree."),
     ]
     for stage, desc in stages:
         print(f"    {stage:<32} {desc}")
-
-
+ 
+ 
 def main():
     try:
         script_dir = os.path.dirname(os.path.abspath(__file__))
     except NameError:
-        script_dir = os.getcwd()  
+        script_dir = os.getcwd()
     csv_path = os.path.join(script_dir, "workouts.csv")
-
+ 
     print()
     print("=" * 60)
-    print("DSCI 551 — Fitness Data Analyzer  (DuckDB internals simulation)")
+    print("DSCI 551 Fitness Data Analyzer  (DuckDB internals simulation)")
     print("=" * 60)
     print()
-    print("  Loading workouts.csv into columnar store ...")
-
+    print("  Load workouts.csv into columnar store.")
+ 
     store = ColumnarStore()
     store.load_from_csv(csv_path)
-
+ 
     print(f"  Loaded {store.total_rows()} workout records.")
-    print(f"  Columns stored: user, workout_type, date, calories, duration")
-    print(f"  Each column is a separate Python list, NOT row-by-row storage.")
-
+    print(f"  Columns stored  : user, workout_type, date, calories, duration")
+    print(f"  Storage layout  : one Python list per column (NOT row-by-row)")
+ 
     print()
     print("=" * 60)
     print("DUCKDB QUERY TRACES (how DuckDB processes each feature)")
     print("=" * 60)
-
+ 
     print_pipeline_trace(
-        query_label       = "Feature 1",
-        sql               = "SELECT user, strftime(date,'%Y-W%W'), SUM(calories) "
-                            "FROM workouts GROUP BY user, week ORDER BY user, week",
+        query_label         = "Feature 1",
+        sql                 = "SELECT user, strftime(date,'%Y-W%W'), SUM(calories) "
+                              "FROM workouts GROUP BY user, week ORDER BY user, week",
         columns_pruned_away = "workout_type, duration",
         columns_used        = "user, date, calories",
     )
-
+ 
     print_pipeline_trace(
-        query_label       = "Feature 2",
-        sql               = "SELECT workout_type, COUNT(*), AVG(calories) "
-                            "FROM workouts GROUP BY workout_type ORDER BY avg DESC",
+        query_label         = "Feature 2",
+        sql                 = "SELECT workout_type, COUNT(*), AVG(calories) "
+                              "FROM workouts GROUP BY workout_type ORDER BY avg DESC",
         columns_pruned_away = "user, date, duration",
         columns_used        = "workout_type, calories",
     )
-
+ 
     feature1_weekly_calorie_summary(store)
-
+ 
     feature2_workout_type_breakdown(store)
-
-    simulation_demo(store)
-
+ 
     print()
     print("=" * 60)
     print("Done.")
     print("=" * 60)
     print()
-
-
+ 
+ 
 if __name__ == "__main__":
     main()
+ 
