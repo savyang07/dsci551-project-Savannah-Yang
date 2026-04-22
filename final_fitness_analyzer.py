@@ -36,12 +36,6 @@ from collections import defaultdict  # built-in: handy dict that auto-creates mi
 
 class ColumnarStore:
    
-    # Mimics DuckDB's columnar storage layer.
-
-    # Each column is a plain Python list. A 'row' is reconstructed by
-    # reading the same index from every column list.
-   
-
     def __init__(self):
         self.user         = []   
         self.workout_type = []   
@@ -50,7 +44,6 @@ class ColumnarStore:
         self.duration     = []   
 
     def load_from_csv(self, filepath):
-        # Read workouts.csv and distribute each field into the matching column list.
         with open(filepath, newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
@@ -61,7 +54,6 @@ class ColumnarStore:
                 self.duration.append(int(row["duration"]))  
 
     def total_rows(self):
-        # Return the number of rows stored (same as len of any single column).
         return len(self.calories)
 
     def get_column(self, name):
@@ -111,7 +103,6 @@ def batch_sum(column_data):
     total_rows = len(column_data)
 
     # Slice the column into chunks of BATCH_SIZE and sum each chunk.
-    # Each iteration works on a fixed-size slice.
     start = 0
     while start < total_rows:
         end = min(start + BATCH_SIZE, total_rows)  
@@ -132,29 +123,24 @@ def batch_group_by_avg(group_column, value_column):
     selection down to the scan.
 
     """
-    # Accumulators — one entry per group key
     group_sum   = defaultdict(int)  
     group_count = defaultdict(int)   
 
     total_rows = len(group_column)
     start = 0
 
-    # Process one DataChunk (batch) at a time
     while start < total_rows:
         end = min(start + BATCH_SIZE, total_rows)
 
-        # Slice only the two needed columns — user, date, duration are never touched
         batch_groups = group_column[start:end]
         batch_values = value_column[start:end]
 
-        # Accumulate into the hash table (DuckDB uses a hash-aggregate operator here)
         for g, v in zip(batch_groups, batch_values):
             group_sum[g]   += v
             group_count[g] += 1
 
         start = end
 
-    # Compute final averages from the accumulators
     result = {}
     for key in group_sum:
         result[key] = {
@@ -297,7 +283,6 @@ def feature2_workout_type_breakdown(store):
     print(f"  Columns read    : workout_type, calories")
     print(f"  Columns skipped : user, date, duration")
     print()
-    print("  --- Batch Execution Log ---")
  
     result = batch_group_by_avg(workout_col, calories_col)
  
@@ -341,11 +326,11 @@ def main():
         script_dir = os.path.dirname(os.path.abspath(__file__))
     except NameError:
         script_dir = os.getcwd()
-    csv_path = os.path.join(script_dir, "workouts.csv")
+    csv_path = os.path.join(script_dir, "workouts_2000.csv")
  
     print()
     print("=" * 60)
-    print("DSCI 551 Fitness Data Analyzer  (DuckDB internals simulation)")
+    print("DSCI 551 Fitness Data Analyzer (DuckDB simulation)")
     print("=" * 60)
     print()
     print("  Load workouts.csv into columnar store.")
@@ -359,7 +344,7 @@ def main():
  
     print()
     print("=" * 60)
-    print("DUCKDB QUERY TRACES (how DuckDB processes each feature)")
+    print("DuckDB Query Traces")
     print("=" * 60)
  
     print_pipeline_trace(
