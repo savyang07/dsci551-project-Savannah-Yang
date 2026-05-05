@@ -20,21 +20,21 @@ Repository Contents
 └── README.md                   # This file
 
 
-Dataset
+Dataset:
 workouts_2000.csv is a synthetic dataset with 2000 records across 5 users (alice, bob, carol, david, emma) and 5 columns: user, workout_type, date, calories, duration.
 
 
-Environment Setup
+Environment Setup:
 Python version: 3.7 or higher
 
 Dependencies: None. The script uses only Python built-in modules: csv, os, collections, and datetime. No pip install required.
 
 
-Configuration
+Configuration:
 No configuration file is needed. The only requirement is that final_fitness_analyzer.py and workouts_2000.csv are in the same folder. The script resolves the CSV path automatically relative to its own location, so it works regardless of what directory you run it from.
 
 
-How to Run
+How to Run:
 Clone the repository:
 
 git clone https://github.com/savyang07/dsci551-project-Savannah-Yang.git
@@ -52,9 +52,10 @@ Run the script:
 python final_fitness_analyzer.py
 
 
-Expected Output
+Expected Output:
 Running the script produces four sections. The beginning of each section should look like this:
 
+```
 ============================================================
 DSCI 551 Fitness Data Analyzer (DuckDB simulation)
 ============================================================
@@ -97,7 +98,7 @@ FEATURE 2: Workout Type Breakdown (Vectorized Batch Execution)
 ============================================================
 Done.
 ============================================================
-
+```
 The exact calorie numbers will match the values in workouts_2000.csv. Feature 2 results are sorted by average calories descending.
 
 
