@@ -89,7 +89,7 @@ FEATURE 2: Workout Type Breakdown (Vectorized Batch Execution)
   Columns read    : workout_type, calories
   Columns skipped : user, date, duration
 
-  Workout Type              Sessions    Avg Calories
+  Workout Type         Sessions   Avg Calories
   -------------------- ---------- --------------
   Swimming                      ...            ...
   Running                       ...            ...
